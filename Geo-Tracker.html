@@ -2,24 +2,24 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geo Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Geo Tracking Offline</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
-        body { margin: 0; font-family: Arial, sans-serif; background-color: #f4f4f9; }
-        #map { width: 100vw; height: calc(100vh - 200px); display: none; }
+        body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; }
+        #map { width: 100vw; height: calc(100vh - 170px); border-radius: 0 0 24px 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);}
         #offline-message {
             display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: #f8d7da;
-            color: #721c24;
-            padding: 20px 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            font-size: 18px;
+            background: #ffeaea;
+            color: #d32f2f;
+            padding: 24px 32px;
+            border-radius: 16px;
+            box-shadow: 0 0 24px rgba(0,0,0,0.12);
+            font-size: 20px;
             z-index: 1000;
             text-align: center;
         }
@@ -27,49 +27,62 @@
             position: fixed;
             bottom: 0;
             width: 100vw;
-            height: 200px;
-            background: #ffffff;
-            box-shadow: 0 -5px 15px rgba(0,0,0,0.15);
+            height: 170px;
+            background: #fff;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
             overflow-y: auto;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
-            padding: 20px 15px;
+            border-top-left-radius: 24px;
+            border-top-right-radius: 24px;
+            padding: 18px 16px 12px 16px;
             z-index: 999;
-            transition: transform 0.3s ease;
-        }
-        #history-header {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
+            flex-direction: column;
         }
-        #history-title { font-weight: bold; font-size: 20px; color: #0078A8; }
-        #toggle-history { background: #0078A8; color: #fff; border: none; padding: 8px 20px; border-radius: 25px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
-        #toggle-history:hover { background: #005f7a; }
-        .history-item {
-            padding: 12px 15px;
-            border-radius: 10px;
-            background-color: #f9f9f9;
-            margin-bottom: 10px;
+        #history-title {
+            font-weight: bold;
+            font-size: 20px;
+            margin-bottom: 8px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+        }
+        #clear-history {
+            background: #e53935;
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            padding: 6px 18px;
+            font-size: 15px;
             cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            transition: background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 8px rgba(229,57,53,0.08);
+            transition: background 0.2s;
         }
-        .history-item:hover { background-color: #f1f1f1; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .coordinates { font-family: monospace; font-weight: bold; color: #555; }
-        .timestamp { font-size: 12px; color: #888; }
+        #clear-history:active { background: #b71c1c; }
+        .history-item {
+            padding: 10px 0 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .coordinates { font-family: monospace; color: #1976d2; }
+        .timestamp { font-size: 13px; color: #888; }
+        @media (max-width: 600px) {
+            #map { height: calc(100vh - 170px); }
+            #history-panel { height: 170px; font-size: 15px; }
+            .history-item { font-size: 15px; }
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <div id="offline-message">Không có kết nối mạng.<br>Bật WiFi hoặc dữ liệu di động để sử dụng bản đồ.<br>Dữ liệu vẫn sẽ được tracking dù đang offline.</div>
+    <div id="offline-message">Không có kết nối mạng.<br>Vẫn tracking vị trí, nhưng không thể hiển thị bản đồ.</div>
     <div id="history-panel">
-        <div id="history-header">
-            <div id="history-title">Lịch sử vị trí (<span id="history-count">0</span>)</div>
-            <button id="toggle-history">Ẩn</button>
+        <div id="history-title">
+            <span>Lịch sử vị trí (<span id="history-count">0</span>)</span>
+            <button id="clear-history">Xóa lịch sử</button>
         </div>
         <div id="history-list"></div>
     </div>
@@ -79,12 +92,10 @@
         window.positionHistory = JSON.parse(localStorage.getItem('positionHistory')) || [];
 
         function initMap() {
-            if (!map) {
-                map = L.map('map').setView([0, 0], 18);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-            }
+            map = L.map('map').setView([0, 0], 18);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
         }
 
         function checkConnection() {
@@ -100,13 +111,35 @@
             }
         }
 
-        function haversineDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c;
+        function updateHistoryDisplay() {
+            const historyList = document.getElementById('history-list');
+            const historyCount = document.getElementById('history-count');
+            historyList.innerHTML = '';
+            window.positionHistory.forEach((pos, idx) => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.innerHTML = `<div class="coordinates">${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)}</div><div class="timestamp">${pos.timestamp}</div>`;
+                item.addEventListener('click', () => {
+                    if (map) {
+                        map.setView([pos.lat, pos.lon], 18);
+                        
+                        if (window.historyMarker) {
+                            map.removeLayer(window.historyMarker);
+                        }
+                        
+                        window.historyMarker = L.marker([pos.lat, pos.lon], {
+                            icon: L.icon({
+                                iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+                                iconSize: [32, 32],
+                                iconAnchor: [16, 32],
+                                popupAnchor: [0, -32]
+                            })
+                        }).addTo(map).bindPopup('Vị trí lịch sử').openPopup();
+                    }
+                });
+                historyList.appendChild(item);
+            });
+            historyCount.textContent = window.positionHistory.length;
         }
 
         function locateUser() {
@@ -118,18 +151,21 @@
                         const accuracy = position.coords.accuracy;
                         const timestamp = new Date(position.timestamp).toLocaleTimeString();
 
-                        if (!lastLat || !lastLon || haversineDistance(lat, lon, lastLat, lastLon) > 10) {
+                        // Chỉ lưu nếu thay đổi trên 10m
+                        const distanceMoved = (!lastLat || !lastLon) ? 999 : Math.sqrt(Math.pow(lat - lastLat, 2) + Math.pow(lon - lastLon, 2)) * 111000;
+                        if (!lastLat || !lastLon || distanceMoved > 10) {
                             lastLat = lat;
                             lastLon = lon;
 
-                            if (map) map.setView([lat, lon], 18);
-
-                            if (!window.userMarker) {
-                                window.userMarker = L.marker([lat, lon]).addTo(map)
-                                    .bindPopup(`Vị trí của bạn<br>Độ chính xác: ~${Math.round(accuracy)}m`).openPopup();
-                            } else {
-                                window.userMarker.setLatLng([lat, lon]);
-                                window.userMarker.getPopup().setContent(`Vị trí của bạn<br>Độ chính xác: ~${Math.round(accuracy)}m`);
+                            if (map) {
+                                map.setView([lat, lon], 18);
+                                if (!window.userMarker) {
+                                    window.userMarker = L.marker([lat, lon]).addTo(map)
+                                        .bindPopup(`Vị trí của bạn<br>Độ chính xác: ~${Math.round(accuracy)}m`).openPopup();
+                                } else {
+                                    window.userMarker.setLatLng([lat, lon]);
+                                    window.userMarker.getPopup().setContent(`Vị trí của bạn<br>Độ chính xác: ~${Math.round(accuracy)}m`);
+                                }
                             }
 
                             window.positionHistory.push({ lat, lon, accuracy, timestamp });
@@ -137,27 +173,29 @@
                             updateHistoryDisplay();
                         }
                     },
-                    (error) => console.error('Lỗi định vị:', error),
-                    { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+                    (error) => alert('Lỗi định vị: ' + error.message),
+                    { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
                 );
             } else {
-                console.error('Trình duyệt của bạn không hỗ trợ định vị địa lý.');
+                alert('Trình duyệt của bạn không hỗ trợ định vị địa lý.');
             }
         }
 
-        function updateHistoryDisplay() {
-            const historyList = document.getElementById('history-list');
-            const historyCount = document.getElementById('history-count');
-            historyList.innerHTML = '';
-            window.positionHistory.forEach((pos) => {
-                const item = document.createElement('div');
-                item.className = 'history-item';
-                item.innerHTML = `<div class="coordinates">${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)}</div><div class="timestamp">${pos.timestamp}</div>`;
-                item.addEventListener('click', () => map.setView([pos.lat, pos.lon], 18));
-                historyList.appendChild(item);
-            });
-            historyCount.textContent = window.positionHistory.length;
-        }
+        // xóa lịch sử
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('clear-history').onclick = function() {
+                if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử vị trí?')) {
+                    window.positionHistory = [];
+                    localStorage.removeItem('positionHistory');
+                    updateHistoryDisplay();
+                    // Xóa marker lịch sử 
+                    if (window.historyMarker && map) {
+                        map.removeLayer(window.historyMarker);
+                        window.historyMarker = null;
+                    }
+                }
+            };
+        });
 
         window.addEventListener('load', () => {
             checkConnection();
